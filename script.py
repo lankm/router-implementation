@@ -1,8 +1,6 @@
 # README
 #
 # Author: Landon Moon, Tsebaot Meron
-#
-# I think this is wrong btw
 
 import socket
 import threading
@@ -23,6 +21,7 @@ class Router:
 
     def run(self):
         #TODO
+        self.display()
         return
     
     def display(self):
@@ -34,9 +33,10 @@ class Router:
 
 # Command line arguments
 if len(sys.argv)<2:
-    print("ERR. Expected:\"script.py PORT\"")
+    print("ERR. Expected:\"script.py PORT LABEL\"")
     os._exit(1)
 port = int(sys.argv[1])
+router = sys.argv[2]
 
 # Input config file date
 configFile = open(".config", "r")
@@ -49,7 +49,6 @@ while (line:=configFile.readline().strip()) != "":
 
 while (line:=configFile.readline().strip()) != "":
     tokens = line.split()
-    print(tokens)
     for r in routers:
         if r.label == tokens[0]:
             r.conns[tokens[1]] = tokens[2]
@@ -58,5 +57,6 @@ while (line:=configFile.readline().strip()) != "":
 
 # activate routers
 for r in routers:
-    Athread = threading.Thread(target=r.run(), args=())
-    Athread.start()
+    if r.label == router:
+        Athread = threading.Thread(target=r.run(), args=())
+        Athread.start()
