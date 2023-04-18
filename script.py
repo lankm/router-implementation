@@ -13,11 +13,13 @@ class Router:
     label = ""
     IP = ""
     conns = {}
+    DV = {}
 
     def __init__(self, label, IP):
         self.label = label
         self.IP = IP
         self.conns = {}
+        self.DV = {}
 
     def run(self):
         #TODO
@@ -29,6 +31,10 @@ class Router:
         print("IP:", self.IP)
         print("Conns:", self.conns)
 # functions ===================================================================
+def findIP(routers, label):
+    for r in routers:
+        if r.label == label:
+            return r.IP
 # main ========================================================================
 
 # Command line arguments
@@ -51,9 +57,9 @@ while (line:=configFile.readline().strip()) != "":
     tokens = line.split()
     for r in routers:
         if r.label == tokens[0]:
-            r.conns[tokens[1]] = tokens[2]
+            r.conns[findIP(routers,tokens[1])] = tokens[2]
         if r.label == tokens[1]:
-            r.conns[tokens[0]] = tokens[2]
+            r.conns[findIP(routers,tokens[0])] = tokens[2]
 
 # activate routers
 for r in routers:
