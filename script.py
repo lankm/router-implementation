@@ -38,6 +38,8 @@ class Router:
         try:
           while True:
             sleep(1)
+             #run the dv over here 
+            self.Distance_vector()
         except KeyboardInterrupt:
           self.running = False
           reader.join()
@@ -68,6 +70,56 @@ class Router:
         print("IP:", self.IP)
         print("port:", self.port)
         print("conns:", self.conns)
+
+
+
+
+    def Distance_vector(self):
+        for ip,weight in self.conns.items():
+            self.DV[ip]=int(weight)
+
+        #this is checking for convergence 
+        while True:
+            temp=dict(self.DV)
+
+            for node in self.conns.keys():
+                
+                #sending the dv to the next node 
+                data= f'{self.IP}:{self.DV}'.encode('utf-8')
+                sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+                sock.sendto(data,(node,self.port))
+                sock.close()
+                """
+                #getting information from node 
+                sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+                sock.bind((self.IP,self.port))
+                sock.listen(5)
+                sock.settimeout(2)
+                """
+                nodeDV=0
+                try:
+                    data,addr = sock.recvfrom(1024)
+                    nodeDV=eval(data.decode()) #this is the neighbors info
+                except:
+                    nodeDV={nodeDV: float("inf")} #this is if it times out
+                sock.close()
+
+                for ip,weight in nodeDV.items():
+                    if ip == self.IP:
+                        continue
+                    if ip not in self.conns.keys():
+                        continue
+                    if ip not in self.DV.keys():
+                        self.DV[ip]=float("inf")
+                    if weight + self.conns[node] < self.DV[ip]:
+                        self.DV[ip]= weight + self.conns[node]
+
+            if temp == self.DV:
+                break
+
+        print("DV for router %s:" % self.label)
+        for ip,weight in self.DV.items():
+            print(ip,weight)
 # functions ===================================================================
 def findIP(routers, label):
     for r in routers:
