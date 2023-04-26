@@ -2,6 +2,7 @@
 #
 # Author: Landon Moon, Tsebaot Meron
 
+from datetime import datetime
 import socket
 import threading
 from time import *
@@ -20,11 +21,11 @@ class Router:
         self.conns = {}
         self.DV = {}
 
-        # threading value
-        self.running = True
+        # runtime info
+        self.updateAmt = 0
 
     def run(self):
-        self.display()
+        self.displayinit()
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((self.IP, self.port))
@@ -38,88 +39,92 @@ class Router:
         try:
           while True:
             sleep(1)
-             #run the dv over here 
-            self.Distance_vector()
+            #run the dv over here 
+            #self.Distance_vector()
         except KeyboardInterrupt:
-          self.running = False
-          reader.join()
-          sender.join()
-          sock.shutdown(socket.SHUT_RDWR)
+          self.displayfinal()
           print('Router shutdown.')
+          os._exit(1) # OS._exit reliquished the owned ports
     
     def reader(self, sock):
-        while self.running:
+        while True:
             try:
-                data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
-                print("reader: %s" % data)
+                # recieve message
+                data, addr = sock.recvfrom(1024)
+                if addr[0] == self.IP:
+                    continue
+                if addr[0] not in self.conns.keys():  #local host is weird sometimes
+                    continue
+                
+                # decode and parse
+                data = data.decode()
+                #print(f'== from:{addr[0]} ==')
+                for data in data.split(','):
+                    toIP = data.split(' ')[0]
+                    dist = int(data.split(' ')[1]) + self.conns[addr[0]]
+                    #print(f'to:{toIP} - dist:{dist}')
+
+                    # change DV values
+                    tempDV = self.DV.copy()
+                    matched = False
+                    for ip, weight in tempDV.items():
+                        # get minimum if exist
+                        if toIP == ip:
+                            minimum = min(weight, dist)
+
+                            # if DV value is changed
+                            if minimum != weight:
+                                print(f'Changed DV entry: {toIP} - {tempDV[toIP]} => {toIP} - {dist}')
+                                self.updateAmt += 1
+
+                            # if ip match was found
+                            self.DV[toIP] = minimum
+                            matched = True
+                    # enter entry if doesn't already exist
+                    if not matched:
+                      print(f'Added DV entry:   {toIP} - {dist}')
+                      self.updateAmt += 1
+                      self.DV[toIP] = dist
+                      
+                
+                    
             except ConnectionResetError:
-                print("reader: no data")
-            sleep(1)
+                pass
         return
     
     def sender(self, sock):
-        while self.running:
+        while True:
+            # construct format for DV
+            data = ''
+            for dest, dist in self.DV.items():
+                data += f'{dest} {dist},'
+            data = data[:-1] # remove final comma
+
+            # send DV to all connections
             for ip in self.conns.keys():
-                sock.sendto(b"data", (ip, self.port))
-            print("sender")
+                sock.sendto(data.encode(), (ip, self.port))
             sleep(1)
         return
     
-    def display(self):
-        print("label:", self.label)
-        print("IP:", self.IP)
-        print("port:", self.port)
+    def displayinit(self):
+        print("== label: %s IP: %s Port: %s ==" % (self.label, self.IP, self.port))
         print("conns:", self.conns)
+        print()
+        return
+    
+    def displayfinal(self):
+        print()
+        print("== %s %s %s ==" % (self.label, self.IP, self.port))
+        print('ID: 1001906270 and 1001629719')
+        print(f'Date and time: %s' % (datetime.now()))
+        print(f'Total updates: {self.updateAmt}')
+        print('-- final DV --')
+        for key, value in self.DV.items():
+            print(f'  IP: {key}   DIST: {value}')
+        print()
+        return
+    
 
-
-
-
-    def Distance_vector(self):
-        for ip,weight in self.conns.items():
-            self.DV[ip]=int(weight)
-
-        #this is checking for convergence 
-        while True:
-            temp=dict(self.DV)
-
-            for node in self.conns.keys():
-                
-                #sending the dv to the next node 
-                data= f'{self.IP}:{self.DV}'.encode('utf-8')
-                sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-                sock.sendto(data,(node,self.port))
-                sock.close()
-                """
-                #getting information from node 
-                sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-                sock.bind((self.IP,self.port))
-                sock.listen(5)
-                sock.settimeout(2)
-                """
-                nodeDV=0
-                try:
-                    data,addr = sock.recvfrom(1024)
-                    nodeDV=eval(data.decode()) #this is the neighbors info
-                except:
-                    nodeDV={nodeDV: float("inf")} #this is if it times out
-                sock.close()
-
-                for ip,weight in nodeDV.items():
-                    if ip == self.IP:
-                        continue
-                    if ip not in self.conns.keys():
-                        continue
-                    if ip not in self.DV.keys():
-                        self.DV[ip]=float("inf")
-                    if weight + self.conns[node] < self.DV[ip]:
-                        self.DV[ip]= weight + self.conns[node]
-
-            if temp == self.DV:
-                break
-
-        print("DV for router %s:" % self.label)
-        for ip,weight in self.DV.items():
-            print(ip,weight)
 # functions ===================================================================
 def findIP(routers, label):
     for r in routers:
@@ -137,22 +142,31 @@ def main():
 
   # Input config file date
   configFile = open(".config", "r")
+  #print(configFile.read())--------------THIS PRINTS OUT CONFIG FOR ALL ROUTERS
 
   routers = []
 
+  # creating routers
   while (line:=configFile.readline().strip()) != "":
       tokens = line.split()
       routers.append( Router(tokens[1], tokens[0], port) )
 
+  # setting connection info
   while (line:=configFile.readline().strip()) != "":
       tokens = line.split()
       for r in routers:
+          # if A -> B
           if r.label == tokens[0]:
-              r.conns[findIP(routers,tokens[1])] = tokens[2]
+              ip = findIP(routers,tokens[1])
+              r.conns[ip] = int(tokens[2])
+          # if B -> A
           if r.label == tokens[1]:
-              r.conns[findIP(routers,tokens[0])] = tokens[2]
+              ip = findIP(routers,tokens[0])
+              r.conns[ip] = int(tokens[2])
+          r.conns[r.IP] = 0
+          r.DV = r.conns  # DV = conns initially
 
-  # activate routers
+  # activate router
   for r in routers:
       if r.label == router:
           r.run()
