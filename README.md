@@ -1,3 +1,5 @@
+# Router Implementation
+
 The script.py file runs one CLI instance of a router.
 The expected input is 'python script.py PORT LABEL' where LABEL is the label coresponding to the router in the .config file.
   Run the script in six different CLI instances. It is done this way so the output is organized and not dumped into one CLI.
